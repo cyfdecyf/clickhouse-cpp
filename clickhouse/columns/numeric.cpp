@@ -40,9 +40,10 @@ void ColumnVector<T>::Append(ColumnRef column) {
 
 template <typename T>
 bool ColumnVector<T>::Load(CodedInputStream* input, size_t rows) {
-    data_.resize(rows);
+    size_t size = data_.size();
+    data_.resize(size + rows);
 
-    return input->ReadRaw(data_.data(), data_.size() * sizeof(T));
+    return input->ReadRaw(data_.data() + size, rows * sizeof(T));
 }
 
 template <typename T>
@@ -58,6 +59,16 @@ size_t ColumnVector<T>::Size() const {
 template <typename T>
 ColumnRef ColumnVector<T>::Slice(size_t begin, size_t len) {
     return std::make_shared<ColumnVector<T>>(SliceVector(data_, begin, len));
+}
+
+template <typename T>
+void ColumnVector<T>::Clear() {
+    data_.resize(0);
+}
+
+template <typename T>
+void ColumnVector<T>::ReserveRows(size_t rows) {
+    data_.reserve(rows);
 }
 
 template class ColumnVector<int8_t>;

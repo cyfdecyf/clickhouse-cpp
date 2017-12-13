@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "../base/input.h"
 #include "../base/coded.h"
 #include "../types/types.h"
@@ -40,6 +42,25 @@ public:
     /// Appends content of given column to the end of current one.
     virtual void Append(ColumnRef column) = 0;
 
+    /// Appends n elements to the end of column.
+    virtual void AppendData(const void* v, size_t n = 1) {
+        (void)v;
+        (void)n;
+        throw "AppendData not supported";
+    }
+
+    template <typename T>
+    void AppendValue(const T& v) {
+        AppendData(&v);
+    }
+    /// For ColumnFixedString, must append char* not std::string.
+    void AppendValue(const char* v) {
+        AppendData(v);
+    }
+    void AppendValue(char* v) {
+        AppendData(v);
+    }
+
     /// Loads column data from input stream.
     virtual bool Load(CodedInputStream* input, size_t rows) = 0;
 
@@ -51,6 +72,37 @@ public:
 
     /// Makes slice of the current column.
     virtual ColumnRef Slice(size_t begin, size_t len) = 0;
+
+    /// Get address of nth row.
+    /// For ColumnArray, return address of the first element of nth row.
+    /// (Avoids datapy copy in ColumnArray::GetAsColumn)
+    /// Row data is contiguous thus can be iterated over by pointer
+    /// arithemetic.
+    virtual const void* Data(size_t n = 0) const {
+        (void)n;
+        throw "Column::Data() not supported";
+    }
+
+    /// Get value of nth row.
+    /// XXX ColumnFixedString::Addr returns char*, so do not use this function
+    /// with ColumnFixedString.
+    template <typename T>
+    const T& Value(size_t n) const {
+        return *static_cast<const T*>(Data(n));
+    }
+
+    /// Return number of elements at nth row.
+    /// ColumnArray overrides this.
+    virtual size_t GetSize(size_t n) const {
+        (void)n;
+        return 1;
+    }
+
+    /// Removes all data, ready for Load/Append again.
+    virtual void Clear() = 0;
+
+    /// Reserve memory to hold data.
+    virtual void ReserveRows(size_t rows) = 0;
 
 protected:
     TypeRef type_;

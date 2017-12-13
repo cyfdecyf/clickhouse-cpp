@@ -36,4 +36,16 @@ void ColumnTuple::Save(CodedOutputStream* output) {
     }
 }
 
+void ColumnTuple::Clear() {
+  for (auto& c : columns_) {
+    c->Clear();
+  }
+}
+
+void ColumnTuple::ReserveRows(size_t rows) {
+  for (auto& c : columns_) {
+      c->ReserveRows(rows);
+  }
+}
+
 }

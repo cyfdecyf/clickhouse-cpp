@@ -39,6 +39,22 @@ public:
     /// Makes slice of the current column.
     ColumnRef Slice(size_t begin, size_t len) override;
 
+    const void* Data(size_t n = 0) const override {
+        return &data_[n];
+    }
+
+    /// Appends n elements to the end of column.
+    void AppendData(const void* v, size_t n = 1) override {
+        auto vv = static_cast<const T*>(v);
+        data_.insert(data_.end(), vv, vv + n);
+    }
+
+    /// Removes all data, ready for Load/Append.
+    void Clear() override;
+
+    /// Reserve memory to hold data.
+    void ReserveRows(size_t rows) override;
+
 private:
     std::vector<T> data_;
 };

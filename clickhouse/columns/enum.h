@@ -30,6 +30,13 @@ public:
     /// Appends content of given column to the end of current one.
     void Append(ColumnRef column) override;
 
+    /// Appends n elements to the end of column.
+    /// v must point to numeric value array, not string array.
+    void AppendData(const void* v, size_t n = 1) override {
+        auto vv = static_cast<const T*>(v);
+        data_.insert(data_.end(), vv, vv + n);
+    }
+
     /// Loads column data from input stream.
     bool Load(CodedInputStream* input, size_t rows) override;
 
@@ -41,6 +48,16 @@ public:
 
     /// Makes slice of the current column.
     ColumnRef Slice(size_t begin, size_t len) override;
+
+    const void* Data(size_t n = 0) const override {
+        return &data_[n];
+    }
+
+    /// Removes all data, ready for Load/Append.
+    void Clear() override;
+
+    /// Reserve memory to hold data.
+    void ReserveRows(size_t rows) override;
 
 private:
     std::vector<T> data_;

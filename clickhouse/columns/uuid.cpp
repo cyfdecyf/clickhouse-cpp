@@ -53,5 +53,13 @@ ColumnRef ColumnUUID::Slice(size_t begin, size_t len) {
     return std::make_shared<ColumnUUID>(data_->Slice(begin * 2, len * 2));
 }
 
+void ColumnUUID::Clear() {
+    data_->Clear();
+}
+
+void ColumnUUID::ReserveRows(size_t rows) {
+    data_->ReserveRows(rows * 2);
+}
+
 }
 

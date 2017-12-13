@@ -4,6 +4,8 @@
 
 namespace clickhouse {
 
+class Client;
+
 struct BlockInfo {
     uint8_t is_overflows = 0;
     int32_t bucket_num = -1;
@@ -39,8 +41,8 @@ public:
     };
 
 public:
-     Block();
-     Block(size_t cols, size_t rows);
+     Block() = default;
+     Block(size_t cols);
     ~Block();
 
     /// Append named column to the block.
@@ -61,7 +63,18 @@ public:
     /// Reference to column by index in the block.
     ColumnRef operator [] (size_t idx) const;
 
+    /// Removes data in all columns, ready for select query or append data.
+    void Clear();
+
+    /// Reserve memory to hold rows of data. Only works for already added
+    /// columns, thus mainly useful for using Block for insert.
+    void ReserveRows(size_t rows);
+
 private:
+    friend class Client;
+
+    void SetColumnName(size_t idx, const std::string& name);
+
     struct ColumnItem {
         std::string name;
         ColumnRef   column;
@@ -69,8 +82,6 @@ private:
 
     BlockInfo info_;
     std::vector<ColumnItem> columns_;
-    /// Count of rows in the block.
-    size_t rows_;
 };
 
 }

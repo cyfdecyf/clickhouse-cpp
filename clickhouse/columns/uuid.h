@@ -41,6 +41,16 @@ public:
     /// Makes slice of the current column.
     ColumnRef Slice(size_t begin, size_t len) override;
 
+    const void* Data(size_t n) const override {
+        return data_->Data(n * 2);
+    }
+
+    /// Removes all data, ready for Load/Append.
+    void Clear() override;
+
+    /// Reserve memory to hold data.
+    void ReserveRows(size_t rows) override;
+
 private:
     std::shared_ptr<ColumnUInt64> data_;
 };

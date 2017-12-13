@@ -66,8 +66,9 @@ void ColumnEnum<T>::Append(ColumnRef column) {
 
 template <typename T>
 bool ColumnEnum<T>::Load(CodedInputStream* input, size_t rows) {
-    data_.resize(rows);
-    return input->ReadRaw(data_.data(), data_.size() * sizeof(T));
+    size_t size = data_.size();
+    data_.resize(size + rows);
+    return input->ReadRaw(data_.data() + size, rows * sizeof(T));
 }
 
 template <typename T>
@@ -83,6 +84,16 @@ size_t ColumnEnum<T>::Size() const {
 template <typename T>
 ColumnRef ColumnEnum<T>::Slice(size_t begin, size_t len) {
     return std::make_shared<ColumnEnum<T>>(type_, SliceVector(data_, begin, len));
+}
+
+template <typename T>
+void ColumnEnum<T>::Clear() {
+    data_.resize(0);
+}
+
+template <typename T>
+void ColumnEnum<T>::ReserveRows(size_t rows) {
+    data_.reserve(rows);
 }
 
 template class ColumnEnum<int8_t>;

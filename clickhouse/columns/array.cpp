@@ -44,11 +44,24 @@ void ColumnArray::Append(ColumnRef column) {
 }
 
 bool ColumnArray::Load(CodedInputStream* input, size_t rows) {
+    size_t old_size = offsets_->Size();
     if (!offsets_->Load(input, rows)) {
         return false;
     }
-    if (!data_->Load(input, (*offsets_)[rows - 1])) {
+
+    size_t new_size = offsets_->Size();
+    size_t load_size = (*offsets_)[new_size - 1]; // Number of elements loaded.
+    if (!data_->Load(input, load_size)) {
         return false;
+    }
+
+    // If there are previously loaded offsets, adjust newly added offsets.
+    if (old_size > 0) {
+        size_t adjust_offset = (*offsets_)[old_size - 1];
+        uint64_t* off = const_cast<uint64_t*>(&(*offsets_)[old_size]);
+        for (auto i = old_size; i < new_size; ++i, ++off) {
+            *off += adjust_offset;
+        }
     }
     return true;
 }
@@ -68,6 +81,18 @@ size_t ColumnArray::GetOffset(size_t n) const {
 
 size_t ColumnArray::GetSize(size_t n) const {
     return (n == 0) ? (*offsets_)[n] : ((*offsets_)[n] - (*offsets_)[n - 1]);
+}
+
+void ColumnArray::Clear() {
+    offsets_->Clear();
+    data_->Clear();
+}
+
+void ColumnArray::ReserveRows(size_t rows) {
+    // Assume each array have 2 elements.
+    const size_t N_ELEMENT = 2;
+    offsets_->ReserveRows(rows);
+    data_->ReserveRows(rows * N_ELEMENT);
 }
 
 }

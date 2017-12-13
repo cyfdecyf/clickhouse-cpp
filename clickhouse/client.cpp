@@ -55,7 +55,7 @@ struct ServerInfo {
 };
 
 std::ostream& operator<<(std::ostream& os, const ClientOptions& opt) {
-    os << "Client(" << opt.user << '@' << opt.host << ":" << opt.port
+    os << "ClientOptions(" << opt.user << '@' << opt.host << ":" << opt.port
        << " ping_before_query:" << opt.ping_before_query
        << " send_retries:" << opt.send_retries
        << " retry_timeout:" << opt.retry_timeout.count()
@@ -70,7 +70,7 @@ public:
      Impl(const ClientOptions& opts);
     ~Impl();
 
-    void ExecuteQuery(Query query);
+    void ExecuteQuery(Query query, Block* block = nullptr);
 
     void SendCancel();
 
@@ -83,7 +83,7 @@ public:
 private:
     bool Handshake();
 
-    bool ReceivePacket(uint64_t* server_packet = nullptr);
+    bool ReceivePacket(uint64_t* server_packet = nullptr, Block* block = nullptr);
 
     void SendQuery(const std::string& query);
 
@@ -96,7 +96,7 @@ private:
     bool ReceiveHello();
 
     /// Reads data packet form input stream.
-    bool ReceiveData();
+    bool ReceiveData(Block* block);
 
     /// Reads exception packet form input stream.
     bool ReceiveException(bool rethrow = false);
@@ -150,6 +150,10 @@ private:
     CodedOutputStream output_;
 
     ServerInfo server_info_;
+
+    /// Query using external passed in Block, should reuse block and accumulate
+    /// all result data.
+    bool external_block_;
 };
 
 
@@ -186,7 +190,7 @@ Client::Impl::~Impl() {
     Disconnect();
 }
 
-void Client::Impl::ExecuteQuery(Query query) {
+void Client::Impl::ExecuteQuery(Query query, Block* block) {
     EnsureNull en(static_cast<QueryEvents*>(&query), &events_);
 
     if (options_.ping_before_query) {
@@ -195,7 +199,16 @@ void Client::Impl::ExecuteQuery(Query query) {
 
     SendQuery(query.GetText());
 
-    while (ReceivePacket()) {
+    std::unique_ptr<Block> b;
+    if (!block) {
+        external_block_ = false;
+        b.reset(new Block);
+        block = b.get();
+    } else {
+        external_block_ = true;
+        block->Clear();
+    }
+    while (ReceivePacket(nullptr, block)) {
         ;
     }
 }
@@ -209,8 +222,9 @@ void Client::Impl::Insert(const std::string& table_name, const Block& block) {
 
     uint64_t server_packet;
     // Receive data packet.
+    Block res_block;
     while (true) {
-        bool ret = ReceivePacket(&server_packet);
+        bool ret = ReceivePacket(&server_packet, &res_block);
 
         if (!ret) {
             throw std::runtime_error("fail to receive data packet");
@@ -275,7 +289,7 @@ bool Client::Impl::Handshake() {
     return true;
 }
 
-bool Client::Impl::ReceivePacket(uint64_t* server_packet) {
+bool Client::Impl::ReceivePacket(uint64_t* server_packet, Block* block) {
     uint64_t packet_type = 0;
 
     if (!input_.ReadVarint64(&packet_type)) {
@@ -287,7 +301,8 @@ bool Client::Impl::ReceivePacket(uint64_t* server_packet) {
 
     switch (packet_type) {
     case ServerCodes::Data: {
-        if (!ReceiveData()) {
+        assert(block != nullptr);
+        if (!ReceiveData(block)) {
             throw std::runtime_error("can't read data packet from input stream");
         }
         return true;
@@ -404,6 +419,17 @@ bool Client::Impl::ReadBlock(Block* block, CodedInputStream* input) {
         return false;
     }
 
+    bool first_reply_block = block->GetRowCount() == 0;
+    bool column_created = block->GetColumnCount() > 0;
+    if (column_created && (num_columns > 0)
+            && (num_columns != block->GetColumnCount())) {
+        // Reuse block, column type and count must match with previously created
+        // columns.
+        fprintf(stderr, "reuse block with mismatching column count %lu != expected %lu",
+                num_columns, block->GetColumnCount());
+        abort();
+    }
+
     for (size_t i = 0; i < num_columns; ++i) {
         std::string name;
         std::string type;
@@ -415,23 +441,33 @@ bool Client::Impl::ReadBlock(Block* block, CodedInputStream* input) {
             return false;
         }
 
-        if (ColumnRef col = CreateColumnByType(type)) {
-            if (num_rows && !col->Load(input, num_rows)) {
-                throw std::runtime_error("can't load");
+        if (!column_created) {
+            if (ColumnRef col = CreateColumnByType(type)) {
+                if (num_rows && !col->Load(input, num_rows)) {
+                    throw std::runtime_error("can't load");
+                }
+                block->AppendColumn(name, col);
+            } else {
+                throw std::runtime_error(std::string("unsupported column type: ") + type);
             }
-
-            block->AppendColumn(name, col);
-        } else {
-            throw std::runtime_error(std::string("unsupported column type: ") + type);
+        } else if (num_rows > 0) {
+            if (first_reply_block) {
+                block->SetColumnName(i, name);
+                if ((*block)[i]->Type()->GetName() != type) {
+                    fprintf(stderr, "can't reuse Block with different type: %s %s\n",
+                            (*block)[i]->Type()->GetName().c_str(), type.c_str());
+                    abort();
+                }
+            }
+            // Once block have data, just append more data into columns.
+            (*block)[i]->Load(input, num_rows);
         }
     }
 
     return true;
 }
 
-bool Client::Impl::ReceiveData() {
-    Block block;
-
+bool Client::Impl::ReceiveData(Block* block) {
     if (REVISION >= DBMS_MIN_REVISION_WITH_TEMPORARY_TABLES) {
         std::string table_name;
 
@@ -440,22 +476,27 @@ bool Client::Impl::ReceiveData() {
         }
     }
 
+    if (!external_block_) {
+        // With callback, clear block for each reply data.
+        block->Clear();
+    }
+
     if (compression_ == CompressionState::Enable) {
         CompressedInput compressed(&input_);
         CodedInputStream coded(&compressed);
 
-        if (!ReadBlock(&block, &coded)) {
+        if (!ReadBlock(block, &coded)) {
             return false;
         }
     } else {
-        if (!ReadBlock(&block, &input_)) {
+        if (!ReadBlock(block, &input_)) {
             return false;
         }
     }
 
     if (events_) {
-        events_->OnData(block);
-        if (!events_->OnDataCancelable(block)) {
+        events_->OnData(*block);
+        if (!events_->OnDataCancelable(*block)) {
             SendCancel();
         }
     }
@@ -720,6 +761,10 @@ void Client::Execute(const Query& query) {
 
 void Client::Select(const std::string& query, SelectCallback cb) {
     Execute(Query(query).OnData(cb));
+}
+
+void Client::Select(const std::string& query, Block* block) {
+    impl_->ExecuteQuery(query, block);
 }
 
 void Client::SelectCancelable(const std::string& query, SelectCancelableCallback cb) {

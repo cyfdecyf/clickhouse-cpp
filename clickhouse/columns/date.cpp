@@ -12,6 +12,13 @@ void ColumnDate::Append(const std::time_t& value) {
     data_->Append(static_cast<uint16_t>(value / 86400));
 }
 
+void ColumnDate::AppendData(const void* v, size_t n) {
+    auto vv = static_cast<const std::time_t*>(v);
+    for (size_t i = 0; i < n; i++) {
+        Append(*(vv + i));
+    }
+}
+
 std::time_t ColumnDate::At(size_t n) const {
     return data_->At(n) * 86400;
 }
@@ -43,6 +50,13 @@ ColumnRef ColumnDate::Slice(size_t begin, size_t len) {
     return result;
 }
 
+void ColumnDate::Clear() {
+    data_->Clear();
+}
+
+void ColumnDate::ReserveRows(size_t rows) {
+    data_->ReserveRows(rows);
+}
 
 ColumnDateTime::ColumnDateTime()
     : Column(Type::CreateDateTime())
@@ -52,6 +66,13 @@ ColumnDateTime::ColumnDateTime()
 
 void ColumnDateTime::Append(const std::time_t& value) {
     data_->Append(static_cast<uint32_t>(value));
+}
+
+void ColumnDateTime::AppendData(const void* v, size_t n) {
+    auto vv = static_cast<const std::time_t*>(v);
+    for (size_t i = 0; i < n; i++) {
+        Append(*(vv + i));
+    }
 }
 
 std::time_t ColumnDateTime::At(size_t n) const {
@@ -85,5 +106,12 @@ ColumnRef ColumnDateTime::Slice(size_t begin, size_t len) {
     return result;
 }
 
+void ColumnDateTime::Clear() {
+    data_->Clear();
+}
+
+void ColumnDateTime::ReserveRows(size_t rows) {
+    data_->ReserveRows(rows);
+}
 
 }
