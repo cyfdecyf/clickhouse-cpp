@@ -41,6 +41,10 @@ public:
     /// Makes slice of the current column.
     ColumnRef Slice(size_t begin, size_t len) override;
 
+    const void* Addr(size_t n) const override {
+        return data_->Addr(n);
+    }
+
 private:
     std::shared_ptr<ColumnUInt64> data_;
 };

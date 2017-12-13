@@ -34,6 +34,10 @@ public:
     /// Makes slice of the current column.
     ColumnRef Slice(size_t begin, size_t len) override;
 
+    const void* Addr(size_t n) const override {
+        return nested_->Addr(n);
+    }
+
 private:
     ColumnRef nested_;
     std::shared_ptr<ColumnUInt8> nulls_;

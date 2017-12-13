@@ -17,6 +17,10 @@ public:
     /// Returns element at given row number.
     std::time_t At(size_t n) const;
 
+    /// Do not support Addr function.
+    /// The underlying data type is uint16 thus can't cast and access like an
+    /// std::time_t array.
+
 public:
     /// Appends content of given column to the end of current one.
     void Append(ColumnRef column) override;
@@ -47,6 +51,10 @@ public:
 
     /// Returns element at given row number.
     std::time_t At(size_t n) const;
+
+    /// Do not support Addr function.
+    /// The underlying data type is uint32 thus can't cast and access like an
+    /// std::time_t array.
 
 public:
     /// Appends content of given column to the end of current one.

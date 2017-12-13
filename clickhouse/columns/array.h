@@ -19,6 +19,9 @@ public:
     /// Type of element of result column same as type of array element.
     ColumnRef GetAsColumn(size_t n) const;
 
+    /// Get array size at pos n.
+    size_t GetSize(size_t n) const;
+
 public:
     /// Appends content of given column to the end of current one.
     void Append(ColumnRef column) override;
@@ -35,10 +38,18 @@ public:
     /// Makes slice of the current column.
     ColumnRef Slice(size_t, size_t) override { return ColumnRef(); }
 
+    /// Return pointer to the start of array at pos n.
+    /// Use GetSize to get size of the array.
+    /// This avoids data copy as would occur in GetAsColumn.
+    const void* Addr(size_t n) const override {
+        return data_->Addr(GetOffset(n));
+    }
+
+    /// Removes all data, ready for Load/Append.
+    void Clear() override;
+
 private:
     size_t GetOffset(size_t n) const;
-
-    size_t GetSize(size_t n) const;
 
 private:
     ColumnRef data_;

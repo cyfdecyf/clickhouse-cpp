@@ -42,6 +42,10 @@ public:
     /// Makes slice of the current column.
     ColumnRef Slice(size_t begin, size_t len) override;
 
+    const void* Addr(size_t n) const override {
+        return &data_[n];
+    }
+
 private:
     std::vector<T> data_;
 };

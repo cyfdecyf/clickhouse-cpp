@@ -60,6 +60,22 @@ inline void ArrayExample(Client& client) {
         }
     );
 
+    std::cout << "get array data without extra copy.\n";
+    // Another way to get array data without extra copy.
+    client.Select("SELECT arr FROM test.array", [](const Block& block)
+        {
+            for (size_t c = 0; c < block.GetRowCount(); ++c) {
+                auto colarr = block[0]->As<ColumnArray>();
+                size_t arr_size = colarr->GetSize(c);
+                auto arr = (const uint64_t*)colarr->Addr(c);
+                for (size_t i = 0; i < arr_size; ++i) {
+                    std::cerr << arr[i] << " ";
+                }
+                std::cerr << std::endl;
+            }
+        }
+    );
+
     /// Delete table.
     client.Execute("DROP TABLE test.array");
 }
@@ -200,7 +216,30 @@ inline void NumbersExample(Client& client) {
                         throw std::runtime_error("invalid sequence of numbers");
                     }
 
-                    num = col->At(i);
+                    num = (*col)[i];
+                }
+            }
+        }
+    );
+
+    std::cout << "Using Addr function to access returned data.\n";
+    num = 0;
+    client.Select("SELECT number, number FROM system.numbers LIMIT 100000", [&num](const Block& block)
+        {
+            if (Block::Iterator(block).IsValid()) {
+                if (block.GetRowCount() == 0) {
+                    return;
+                }
+
+                auto col = reinterpret_cast<const uint64_t*>(block[0]->Addr(0));
+
+                for (size_t i = 0; i < block[0]->Size(); ++i) {
+                    if (col[i] != num) {
+                        std::cerr << "expected number: " << num << " got: " << col[i];
+                        throw std::runtime_error("invalid sequence of numbers");
+                    }
+
+                    num++;
                 }
             }
         }
@@ -287,7 +326,10 @@ inline void EnumExample(Client& client) {
 
             for (size_t i = 0; i < block.GetRowCount(); ++i) {
                 std::cout << (*block[0]->As<ColumnUInt64>())[i] << " "
-                          << (*block[1]->As<ColumnEnum8>()).NameAt(i) << "\n";
+                          << (*block[1]->As<ColumnEnum8>()).NameAt(i) << " "
+                          // int8 is treated as char, convert to int for printing.
+                          // Using Addr to avoid dynamic cast.
+                          << (int)(*(int8_t*)(block[1]->Addr(i))) << "\n";
             }
         }
     );

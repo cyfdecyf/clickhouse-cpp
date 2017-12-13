@@ -52,6 +52,25 @@ public:
     /// Makes slice of the current column.
     virtual ColumnRef Slice(size_t begin, size_t len) = 0;
 
+    /// Get address of nth row.
+    /// For ColumnArray, return address of the first element of nth row.
+    /// (Avoids datapy copy in ColumnArray::GetAsColumn)
+    /// Row data is contiguous thus can be iterated over by pointer
+    /// arithemetic.
+    virtual const void* Addr(size_t n) const {
+        (void)n;
+        throw "not supported";
+    }
+
+    /// Get value of nth row.
+    template <typename T>
+    const T& Value(size_t n) const {
+        return *static_cast<const T*>(Addr(n));
+    }
+
+    /// Removes all data, ready for Load/Append again.
+    virtual void Clear() = 0;
+
 protected:
     TypeRef type_;
 };
