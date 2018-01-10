@@ -40,9 +40,10 @@ void ColumnVector<T>::Append(ColumnRef column) {
 
 template <typename T>
 bool ColumnVector<T>::Load(CodedInputStream* input, size_t rows) {
-    data_.resize(rows);
+    size_t size = data_.size();
+    data_.resize(size + rows);
 
-    return input->ReadRaw(data_.data(), data_.size() * sizeof(T));
+    return input->ReadRaw(data_.data() + size, rows * sizeof(T));
 }
 
 template <typename T>

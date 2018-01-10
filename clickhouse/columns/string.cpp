@@ -33,15 +33,16 @@ void ColumnFixedString::Append(ColumnRef column) {
 }
 
 bool ColumnFixedString::Load(CodedInputStream* input, size_t rows) {
+    size_t size = data_.size();
+    data_.resize(size + rows);
+
     for (size_t i = 0; i < rows; ++i) {
-        std::string s;
+        std::string& s = data_[size + i];
         s.resize(string_size_);
 
         if (!WireFormat::ReadBytes(input, &s[0], s.size())) {
             return false;
         }
-
-        data_.push_back(s);
     }
 
     return true;
@@ -98,14 +99,15 @@ void ColumnString::Append(ColumnRef column) {
 }
 
 bool ColumnString::Load(CodedInputStream* input, size_t rows) {
+    size_t size = data_.size();
+    data_.resize(size + rows);
+
     for (size_t i = 0; i < rows; ++i) {
-        std::string s;
+        std::string& s = data_[size + i];
 
         if (!WireFormat::ReadString(input, &s)) {
             return false;
         }
-
-        data_.push_back(s);
     }
 
     return true;
