@@ -53,5 +53,9 @@ ColumnRef ColumnUUID::Slice(size_t begin, size_t len) {
     return std::make_shared<ColumnUUID>(data_->Slice(begin * 2, len * 2));
 }
 
+void ColumnUUID::Clear() {
+    data_->Clear();
+}
+
 }
 

@@ -45,6 +45,9 @@ public:
         return data_->Addr(n);
     }
 
+    /// Removes all data, ready for Load/Append.
+    void Clear() override;
+
 private:
     std::shared_ptr<ColumnUInt64> data_;
 };

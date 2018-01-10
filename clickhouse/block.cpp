@@ -78,4 +78,16 @@ ColumnRef Block::operator [] (size_t idx) const {
     throw std::out_of_range("column index is out of range");
 }
 
+void Block::Clear() {
+    info_.bucket_num = -1;
+    info_.is_overflows = 0;
+
+    rows_ = 0;
+
+    for (auto& col : columns_) {
+        col.name = "";
+        col.column->Clear();
+    }
+}
+
 }

@@ -86,6 +86,11 @@ ColumnRef ColumnEnum<T>::Slice(size_t begin, size_t len) {
     return std::make_shared<ColumnEnum<T>>(type_, SliceVector(data_, begin, len));
 }
 
+template <typename T>
+void ColumnEnum<T>::Clear() {
+    data_.resize(0);
+}
+
 template class ColumnEnum<int8_t>;
 template class ColumnEnum<int16_t>;
 

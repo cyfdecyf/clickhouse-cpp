@@ -68,6 +68,13 @@ ColumnRef ColumnFixedString::Slice(size_t begin, size_t len) {
     return result;
 }
 
+void ColumnFixedString::Clear() {
+    size_t* psize = const_cast<size_t*>(&string_size_);
+    *psize = 0;
+    for (auto& s : data_) {
+      s.resize(0);
+    }
+}
 
 ColumnString::ColumnString()
     : Column(Type::CreateString())
@@ -125,6 +132,12 @@ size_t ColumnString::Size() const {
 
 ColumnRef ColumnString::Slice(size_t begin, size_t len) {
     return std::make_shared<ColumnString>(SliceVector(data_, begin, len));
+}
+
+void ColumnString::Clear() {
+    for (auto& s : data_) {
+      s.resize(0);
+    }
 }
 
 }

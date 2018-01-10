@@ -33,6 +33,9 @@ public:
     /// Makes slice of the current column.
     ColumnRef Slice(size_t, size_t) override { return ColumnRef(); }
 
+    /// Removes all data, ready for Load/Append.
+    void Clear() override;
+
 private:
     std::vector<ColumnRef> columns_;
 };

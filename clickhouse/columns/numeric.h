@@ -43,6 +43,9 @@ public:
         return &data_[n];
     }
 
+    /// Removes all data, ready for Load/Append.
+    void Clear() override;
+
 private:
     std::vector<T> data_;
 };

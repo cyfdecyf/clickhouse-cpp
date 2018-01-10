@@ -81,4 +81,9 @@ size_t ColumnArray::GetSize(size_t n) const {
     return (n == 0) ? (*offsets_)[n] : ((*offsets_)[n] - (*offsets_)[n - 1]);
 }
 
+void ColumnArray::Clear() {
+    offsets_->Clear();
+    data_->Clear();
+}
+
 }

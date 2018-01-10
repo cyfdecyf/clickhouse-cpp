@@ -43,6 +43,10 @@ ColumnRef ColumnDate::Slice(size_t begin, size_t len) {
     return result;
 }
 
+void ColumnDate::Clear() {
+    data_->Clear();
+}
+
 
 ColumnDateTime::ColumnDateTime()
     : Column(Type::CreateDateTime())
@@ -83,6 +87,10 @@ ColumnRef ColumnDateTime::Slice(size_t begin, size_t len) {
     result->data_->Append(col);
 
     return result;
+}
+
+void ColumnDateTime::Clear() {
+    data_->Clear();
 }
 
 

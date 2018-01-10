@@ -38,6 +38,9 @@ public:
         return nested_->Addr(n);
     }
 
+    /// Removes all data, ready for Load/Append.
+    void Clear() override;
+
 private:
     ColumnRef nested_;
     std::shared_ptr<ColumnUInt8> nulls_;

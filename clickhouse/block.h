@@ -61,6 +61,9 @@ public:
     /// Reference to column by index in the block.
     ColumnRef operator [] (size_t idx) const;
 
+    /// Removes all data, ready for select query or append data.
+    void Clear();
+
 private:
     struct ColumnItem {
         std::string name;

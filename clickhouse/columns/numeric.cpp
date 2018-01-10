@@ -61,6 +61,11 @@ ColumnRef ColumnVector<T>::Slice(size_t begin, size_t len) {
     return std::make_shared<ColumnVector<T>>(SliceVector(data_, begin, len));
 }
 
+template <typename T>
+void ColumnVector<T>::Clear() {
+    data_.resize(0);
+}
+
 template class ColumnVector<int8_t>;
 template class ColumnVector<int16_t>;
 template class ColumnVector<int32_t>;
