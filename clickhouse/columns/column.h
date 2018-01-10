@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "../base/input.h"
 #include "../base/coded.h"
 #include "../types/types.h"
@@ -70,6 +72,11 @@ public:
 
     /// Removes all data, ready for Load/Append again.
     virtual void Clear() = 0;
+
+    /// Return type name used by ClickHouse protocol.
+    std::string GetTypeName() {
+        return type_->GetName();
+    }
 
 protected:
     TypeRef type_;

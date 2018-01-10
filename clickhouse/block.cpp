@@ -31,26 +31,22 @@ bool Block::Iterator::IsValid() const {
 }
 
 
-Block::Block()
-    : rows_(0)
-{
-}
-
 Block::Block(size_t cols, size_t rows)
-    : rows_(rows)
 {
+    // TODO reserve rows for each column.
+    (void)rows;
     columns_.reserve(cols);
 }
 
 Block::~Block() = default;
 
 void Block::AppendColumn(const std::string& name, const ColumnRef& col) {
-    if (columns_.empty()) {
-        rows_ = col->Size();
-    } else if (col->Size() != rows_) {
+    if ((columns_.size() > 0) &&
+            (col->Size() != columns_[0].column->Size())) {
         throw std::runtime_error(
-            "all clumns in block must have same count of rows"
-        );
+            "all columns in block must have same count of rows, 1st column size "
+            + std::to_string(columns_[0].column->Size()) + " != "
+            + std::to_string(col->Size()));
     }
 
     columns_.push_back(ColumnItem{name, col});
@@ -67,7 +63,10 @@ const BlockInfo& Block::Info() const {
 
 /// Count of rows in the block.
 size_t Block::GetRowCount() const {
-    return rows_;
+    if (columns_.empty()) {
+        return 0;
+    }
+    return columns_[0].column->Size();
 }
 
 ColumnRef Block::operator [] (size_t idx) const {
@@ -78,14 +77,16 @@ ColumnRef Block::operator [] (size_t idx) const {
     throw std::out_of_range("column index is out of range");
 }
 
+void Block::SetColumnName(size_t idx, const std::string& name) {
+    columns_[idx].name = name;
+}
+
 void Block::Clear() {
     info_.bucket_num = -1;
     info_.is_overflows = 0;
 
-    rows_ = 0;
-
     for (auto& col : columns_) {
-        col.name = "";
+        col.name.resize(0);
         col.column->Clear();
     }
 }

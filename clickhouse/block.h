@@ -4,6 +4,8 @@
 
 namespace clickhouse {
 
+class Client;
+
 struct BlockInfo {
     uint8_t is_overflows = 0;
     int32_t bucket_num = -1;
@@ -39,7 +41,7 @@ public:
     };
 
 public:
-     Block();
+     Block() = default;
      Block(size_t cols, size_t rows);
     ~Block();
 
@@ -61,10 +63,14 @@ public:
     /// Reference to column by index in the block.
     ColumnRef operator [] (size_t idx) const;
 
-    /// Removes all data, ready for select query or append data.
+    /// Removes data in all columns, ready for select query or append data.
     void Clear();
 
 private:
+    friend class Client;
+
+    void SetColumnName(size_t idx, const std::string& name);
+
     struct ColumnItem {
         std::string name;
         ColumnRef   column;
@@ -72,8 +78,6 @@ private:
 
     BlockInfo info_;
     std::vector<ColumnItem> columns_;
-    /// Count of rows in the block.
-    size_t rows_;
 };
 
 }

@@ -80,6 +80,13 @@ public:
     /// one or more call of \p cb.
     void Select(const std::string& query, SelectCallback cb);
 
+    /// Intends for execute select queries.  Result data will be available
+    /// in Block. Data existing in Block before calling this function will
+    /// be erased.
+    /// Note: in order to reuse allocated memory in Block, after first use, all
+    /// following queries should have the columns with same data type.
+    void Select(const std::string& query, Block* rb);
+
     /// Executes a select query which can be canceled by returning false from
     /// the data handler function \p cb.
     void SelectCancelable(const std::string& query, SelectCancelableCallback cb);

@@ -45,8 +45,11 @@ inline void ArrayExample(Client& client) {
     arr->AppendAsColumn(id);
 
     b.AppendColumn("arr", arr);
+    if (b.GetRowCount() != 4) {
+        fprintf(stderr, "invalid insert block row count: %lu\n", b.GetRowCount());
+        abort();
+    }
     client.Insert("test.array", b);
-
 
     client.Select("SELECT arr FROM test.array", [](const Block& block)
         {
@@ -60,21 +63,36 @@ inline void ArrayExample(Client& client) {
         }
     );
 
-    std::cout << "get array data without extra copy.\n";
+    Block block;
+    std::cout << "Get array data without extra copy.\n";
     // Another way to get array data without extra copy.
-    client.Select("SELECT arr FROM test.array", [](const Block& block)
-        {
-            for (size_t c = 0; c < block.GetRowCount(); ++c) {
-                auto colarr = block[0]->As<ColumnArray>();
-                size_t arr_size = colarr->GetSize(c);
-                auto arr = (const uint64_t*)colarr->Addr(c);
-                for (size_t i = 0; i < arr_size; ++i) {
-                    std::cerr << arr[i] << " ";
-                }
-                std::cerr << std::endl;
-            }
+    client.Select("SELECT arr FROM test.array", &block);
+    if (block.GetRowCount() != 4) {
+        fprintf(stderr, "expect row count 4 != %lu\n", block.GetRowCount());
+        abort();
+    }
+    for (size_t c = 0; c < block.GetRowCount(); ++c) {
+        auto colarr = block[0]->As<ColumnArray>();
+        size_t arr_size = colarr->GetSize(c);
+        auto arr = (const uint64_t*)colarr->Addr(c);
+        for (size_t i = 0; i < arr_size; ++i) {
+            std::cerr << arr[i] << " ";
         }
-    );
+        std::cerr << std::endl;
+    }
+
+    std::cout << "Reuse block.\n";
+    // Another way to get array data without extra copy.
+    client.Select("SELECT arr FROM test.array", &block);
+    for (size_t c = 0; c < block.GetRowCount(); ++c) {
+        auto colarr = block[0]->As<ColumnArray>();
+        size_t arr_size = colarr->GetSize(c);
+        auto arr = (const uint64_t*)colarr->Addr(c);
+        for (size_t i = 0; i < arr_size; ++i) {
+            std::cerr << arr[i] << " ";
+        }
+        std::cerr << std::endl;
+    }
 
     /// Delete table.
     client.Execute("DROP TABLE test.array");

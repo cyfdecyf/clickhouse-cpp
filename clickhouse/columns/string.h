@@ -46,6 +46,7 @@ public:
 private:
     const size_t string_size_;
     std::vector<std::string> data_;
+    size_t size_ = 0;
 };
 
 
@@ -91,6 +92,7 @@ public:
 
 private:
     std::vector<std::string> data_;
+    size_t size_ = 0;
 };
 
 }
