@@ -18,11 +18,11 @@ protected:
     }
 
     Client* client_ = nullptr;
+
+    static const int REUSE_BLOCK_CNT = 3;
 };
 
 TEST_P(ClientCase, Array) {
-    Block b;
-
     /// Create a table.
     client_->Execute(
             "CREATE TABLE IF NOT EXISTS test.array (arr Array(UInt64)) "
@@ -43,68 +43,163 @@ TEST_P(ClientCase, Array) {
         arr->AppendAsColumn(id);
 
         id->Append(9);
+
         arr->AppendAsColumn(id);
 
+        Block b;
         b.AppendColumn("arr", arr);
         client_->Insert("test.array", b);
     }
 
     const uint64_t ARR_SIZE[] = { 1, 2, 3, 4 };
     const uint64_t VALUE[] = { 1, 3, 7, 9 };
+    const size_t NUM_ROW = 4;
+
+    /// Test with callback select.
     size_t row = 0;
     client_->Select("SELECT arr FROM test.array",
-            [ARR_SIZE, VALUE, &row](const Block& block)
+            [=, &row](const Block& block)
         {
             if (block.GetRowCount() == 0) {
                 return;
             }
-            EXPECT_EQ(1U, block.GetColumnCount());
+
+            ASSERT_LE(row + block.GetRowCount(), NUM_ROW);
+            ASSERT_EQ(1U, block.GetColumnCount());
+            EXPECT_EQ("arr", block.GetColumnName(0));
+
             for (size_t c = 0; c < block.GetRowCount(); ++c, ++row) {
-                auto col = block[0]->As<ColumnArray>()->GetAsColumn(c);
+                auto arr = block[0]->As<ColumnArray>();
+                auto col = arr->GetAsColumn(c)->As<ColumnUInt64>();
+
                 EXPECT_EQ(ARR_SIZE[row], col->Size());
                 for (size_t i = 0; i < col->Size(); ++i) {
-                    EXPECT_EQ(VALUE[i], (*col->As<ColumnUInt64>())[i]);
+                    EXPECT_EQ(VALUE[i], (*col)[i]);
                 }
             }
         }
     );
+    EXPECT_EQ(NUM_ROW, row);
 
-    EXPECT_EQ(4U, row);
+    /// Test with non-callback select with block reuse.
+    Block block;
+    for (int t = 0; t < REUSE_BLOCK_CNT; ++t) {
+        client_->Select("SELECT arr FROM test.array", &block);
+
+        ASSERT_EQ(NUM_ROW, block.GetRowCount());
+        ASSERT_EQ(1U, block.GetColumnCount());
+        EXPECT_EQ("arr", block.GetColumnName(0));
+
+        for (size_t c = 0; c < block.GetRowCount(); ++c) {
+            auto arr = block[0]->As<ColumnArray>();
+            EXPECT_EQ(ARR_SIZE[c], arr->GetSize(c));
+
+            auto p = static_cast<const uint64_t*>(arr->Addr(c));
+            for (size_t i = 0; i < ARR_SIZE[c]; ++i) {
+                EXPECT_EQ(VALUE[i], *p++);
+            }
+        }
+    }
 }
 
-TEST_P(ClientCase, Date) {
-    Block b;
+TEST_P(ClientCase, LargeArray) {
+    /// Test Array offset adjusting when selecting large array without callback.
 
     /// Create a table.
     client_->Execute(
-            "CREATE TABLE IF NOT EXISTS test.date (d DateTime) "
+            "CREATE TABLE IF NOT EXISTS test.largearray (arr Array(UInt64)) "
+            "ENGINE = Memory");
+
+    const size_t ARR_SIZE[] = { 10000, 50000, 100, 10000, 10 };
+    constexpr size_t NUM_ROW = sizeof(ARR_SIZE) / sizeof(ARR_SIZE[0]);
+
+    uint64_t val = 0;
+    /// Insert some values.
+    for (size_t r = 0; r < NUM_ROW; ++r) {
+        auto id = std::make_shared<ColumnUInt64>();
+        for (uint64_t i = 0; i < ARR_SIZE[r]; ++i, ++val)  {
+            id->Append(val);
+        }
+
+        auto arr = std::make_shared<ColumnArray>(std::make_shared<ColumnUInt64>());
+        arr->AppendAsColumn(id);
+
+        Block b;
+        b.AppendColumn("arr", arr);
+        client_->Insert("test.largearray", b);
+    }
+
+    /// Test with non-callback select with block reuse.
+    Block block;
+    for (int t = 0; t < REUSE_BLOCK_CNT; ++t) {
+        client_->Select("SELECT arr FROM test.largearray", &block);
+
+        ASSERT_EQ(NUM_ROW, block.GetRowCount());
+        ASSERT_EQ(1U, block.GetColumnCount());
+        EXPECT_EQ("arr", block.GetColumnName(0));
+
+        val = 0;
+        for (size_t r = 0; r < NUM_ROW; ++r) {
+            auto arr = block[0]->As<ColumnArray>();
+            ASSERT_EQ(ARR_SIZE[r], arr->GetSize(r));
+
+            auto p = static_cast<const uint64_t*>(arr->Addr(r));
+            for (size_t i = 0; i < ARR_SIZE[r]; ++i, ++val) {
+                EXPECT_EQ(val, *p++);
+            }
+        }
+    }
+}
+
+TEST_P(ClientCase, DateTime) {
+    /// Create a table.
+    client_->Execute(
+            "CREATE TABLE IF NOT EXISTS test.datetime (d DateTime) "
             "ENGINE = Memory");
 
     auto d = std::make_shared<ColumnDateTime>();
     auto const now = std::time(nullptr);
     d->Append(now);
-    b.AppendColumn("d", d);
-    client_->Insert("test.date", b);
 
-    client_->Select("SELECT d FROM test.date", [&now](const Block& block)
+    Block b;
+    b.AppendColumn("d", d);
+    client_->Insert("test.datetime", b);
+
+    client_->Select("SELECT d FROM test.datetime", [&now](const Block& block)
         {
             if (block.GetRowCount() == 0) {
                 return;
             }
-            EXPECT_EQ(1U, block.GetRowCount());
-            EXPECT_EQ(1U, block.GetColumnCount());
+
+            ASSERT_EQ(1U, block.GetRowCount());
+            ASSERT_EQ(1U, block.GetColumnCount());
+            EXPECT_EQ("d", block.GetColumnName(0));
+
+            auto col = block[0]->As<ColumnDateTime>();
             for (size_t c = 0; c < block.GetRowCount(); ++c) {
-                auto col = block[0]->As<ColumnDateTime>();
-                std::time_t t = col->As<ColumnDateTime>()->At(c);
-                EXPECT_EQ(now, t);
+                EXPECT_EQ(now, col->At(c));
             }
         }
     );
+
+    /// Test with non-callback select with block reuse.
+    Block block;
+    for (int t = 0; t < REUSE_BLOCK_CNT; ++t) {
+        client_->Select("SELECT d FROM test.datetime", &block);
+
+        ASSERT_EQ(1U, block.GetRowCount());
+        ASSERT_EQ(1U, block.GetColumnCount());
+
+        auto col = block[0]->As<ColumnDateTime>();
+        for (size_t c = 0; c < block.GetRowCount(); ++c) {
+            EXPECT_EQ(now, col->At(c));
+        }
+    }
 }
 
-TEST_P(ClientCase, Generic) {
+TEST_P(ClientCase, String) {
     client_->Execute(
-            "CREATE TABLE IF NOT EXISTS test.client (id UInt64, name String) "
+            "CREATE TABLE IF NOT EXISTS test.string (id UInt64, name String) "
             "ENGINE = Memory");
 
     const struct {
@@ -116,11 +211,10 @@ TEST_P(ClientCase, Generic) {
         { 5, "bar" },
         { 7, "name" },
     };
+    constexpr size_t NUM_ROW = sizeof(TEST_DATA) / sizeof(TEST_DATA[0]);
 
     /// Insert some values.
     {
-        Block block;
-
         auto id = std::make_shared<ColumnUInt64>();
         auto name = std::make_shared<ColumnString>();
         for (auto const& td : TEST_DATA) {
@@ -128,28 +222,137 @@ TEST_P(ClientCase, Generic) {
             name->Append(td.name);
         }
 
+        Block block;
         block.AppendColumn("id"  , id);
         block.AppendColumn("name", name);
 
-        client_->Insert("test.client", block);
+        client_->Insert("test.string", block);
     }
 
     /// Select values inserted in the previous step.
     size_t row = 0;
-    client_->Select("SELECT id, name FROM test.client", [TEST_DATA, &row](const Block& block)
+    client_->Select("SELECT id, name FROM test.string", [=, &row](const Block& block)
         {
             if (block.GetRowCount() == 0) {
                 return;
             }
+
+            ASSERT_LE(row + block.GetRowCount(), NUM_ROW);
+            ASSERT_EQ(2U, block.GetColumnCount());
             EXPECT_EQ("id", block.GetColumnName(0));
             EXPECT_EQ("name", block.GetColumnName(1));
+
+            auto id = block[0]->As<ColumnUInt64>();
+            auto name = block[1]->As<ColumnString>();
             for (size_t c = 0; c < block.GetRowCount(); ++c, ++row) {
-                EXPECT_EQ(TEST_DATA[row].id, (*block[0]->As<ColumnUInt64>())[c]);
-                EXPECT_EQ(TEST_DATA[row].name, (*block[1]->As<ColumnString>())[c]);
+                EXPECT_EQ(TEST_DATA[row].id, (*id)[c]);
+                EXPECT_EQ(TEST_DATA[row].name, (*name)[c]);
             }
         }
     );
-    EXPECT_EQ(sizeof(TEST_DATA)/sizeof(TEST_DATA[0]), row);
+    EXPECT_EQ(NUM_ROW, row);
+
+    /// Test with non-callback select with block reuse.
+    Block block;
+    for (int t = 0; t < REUSE_BLOCK_CNT; ++t) {
+        client_->Select("SELECT id, name FROM test.string", &block);
+
+        ASSERT_EQ(NUM_ROW, block.GetRowCount());
+        ASSERT_EQ(2U, block.GetColumnCount());
+        EXPECT_EQ("id", block.GetColumnName(0));
+        EXPECT_EQ("name", block.GetColumnName(1));
+
+        auto id = static_cast<const uint64_t*>(block[0]->Addr(0));
+        auto name = static_cast<const std::string*>(block[1]->Addr(0));
+        for (size_t c = 0; c < block.GetRowCount(); ++c) {
+            EXPECT_EQ(TEST_DATA[c].id, *id++);
+            EXPECT_EQ(TEST_DATA[c].name, *name++);
+
+            /// Test Column::Value.
+            EXPECT_EQ(TEST_DATA[c].id, block[0]->Value<uint64_t>(c));
+            EXPECT_EQ(TEST_DATA[c].name, block[1]->Value<std::string>(c));
+        }
+    }
+}
+
+TEST_P(ClientCase, FixedString) {
+    const size_t FIXED_STR_LEN = 4;
+
+    client_->Execute(
+            "CREATE TABLE IF NOT EXISTS test.fixedstring (id UInt64, name FixedString(4)) "
+            "ENGINE = Memory");
+
+    const struct {
+        uint64_t id;
+        std::string name;
+    } TEST_DATA[] = {
+        { 1, "id" },
+        { 3, "foo" },
+        { 5, "bar" },
+        { 7, "name" },
+    };
+    constexpr size_t NUM_ROW = sizeof(TEST_DATA) / sizeof(TEST_DATA[0]);
+
+    /// Insert some values.
+    {
+        auto id = std::make_shared<ColumnUInt64>();
+        auto name = std::make_shared<ColumnFixedString>(FIXED_STR_LEN);
+        for (auto const& td : TEST_DATA) {
+            id->Append(td.id);
+            name->Append(td.name);
+        }
+
+        Block block;
+        block.AppendColumn("id"  , id);
+        block.AppendColumn("name", name);
+
+        client_->Insert("test.fixedstring", block);
+    }
+
+    /// Select values inserted in the previous step.
+    size_t row = 0;
+    client_->Select("SELECT id, name FROM test.fixedstring", [=, &row](const Block& block)
+        {
+            if (block.GetRowCount() == 0) {
+                return;
+            }
+
+            ASSERT_LE(row + block.GetRowCount(), NUM_ROW);
+            ASSERT_EQ(2U, block.GetColumnCount());
+            EXPECT_EQ("id", block.GetColumnName(0));
+            EXPECT_EQ("name", block.GetColumnName(1));
+
+            auto id = block[0]->As<ColumnUInt64>();
+            auto name = block[1]->As<ColumnFixedString>();
+            for (size_t c = 0; c < block.GetRowCount(); ++c, ++row) {
+                EXPECT_EQ(TEST_DATA[row].id, (*id)[c]);
+                EXPECT_EQ(FIXED_STR_LEN, (*name)[c].size());
+                /// Construct new string to drop ending null byte for test.
+                EXPECT_EQ(TEST_DATA[row].name, std::string((*name)[c].c_str()));
+            }
+        }
+    );
+    EXPECT_EQ(NUM_ROW, row);
+
+    /// Test with non-callback select with block reuse.
+    Block block;
+    for (int t = 0; t < REUSE_BLOCK_CNT; ++t) {
+        client_->Select("SELECT id, name FROM test.fixedstring", &block);
+
+        ASSERT_EQ(NUM_ROW, block.GetRowCount());
+        ASSERT_EQ(2U, block.GetColumnCount());
+        EXPECT_EQ("id", block.GetColumnName(0));
+        EXPECT_EQ("name", block.GetColumnName(1));
+
+        auto id = static_cast<const uint64_t*>(block[0]->Addr(0));
+        auto name = static_cast<const std::string*>(block[1]->Addr(0));
+        for (size_t c = 0; c < block.GetRowCount(); ++c) {
+            EXPECT_EQ(TEST_DATA[c].id, *id++);
+            EXPECT_EQ(FIXED_STR_LEN, name->size());
+            EXPECT_EQ(TEST_DATA[c].name, std::string(name->c_str()));
+            ++name;
+        }
+    }
 }
 
 TEST_P(ClientCase, Nullable) {
@@ -171,6 +374,7 @@ TEST_P(ClientCase, Nullable) {
         { 3, 1, cur_date + 1 * 86400, 0 },
         { 4, 1, cur_date + 2 * 86400, 1 },
     };
+    constexpr size_t NUM_ROW = sizeof(TEST_DATA) / sizeof(TEST_DATA[0]);
 
     /// Insert some values.
     {
@@ -201,37 +405,66 @@ TEST_P(ClientCase, Nullable) {
     /// Select values inserted in the previous step.
     size_t row = 0;
     client_->Select("SELECT id, date FROM test.nullable",
-            [TEST_DATA, &row](const Block& block)
+            [=, &row](const Block& block)
         {
+            if (block.GetRowCount() == 0) {
+                return;
+            }
+
+            ASSERT_EQ(2U, block.GetColumnCount());
+
+            auto col_id   = block[0]->As<ColumnNullable>();
+            auto col_date = block[1]->As<ColumnNullable>();
+            auto id = col_id->Nested()->As<ColumnUInt64>();
+            auto date = col_date->Nested()->As<ColumnDate>();
+
             for (size_t c = 0; c < block.GetRowCount(); ++c, ++row) {
-                auto col_id   = block[0]->As<ColumnNullable>();
-                auto col_date = block[1]->As<ColumnNullable>();
+                EXPECT_EQ(TEST_DATA[row].id_null, col_id->IsNull(c));
+                EXPECT_EQ(TEST_DATA[row].date_null, col_date->IsNull(c));
 
-                EXPECT_EQ(static_cast<bool>(TEST_DATA[row].id_null),
-                        col_id->IsNull(c));
                 if (!col_id->IsNull(c)) {
-                    EXPECT_EQ(TEST_DATA[row].id,
-                            col_id->Nested()->As<ColumnUInt64>()->At(c));
+                    EXPECT_EQ(TEST_DATA[row].id, id->At(c));
                 }
-
-                EXPECT_EQ(static_cast<bool>(TEST_DATA[row].date_null),
-                        col_date->IsNull(c));
                 if (!col_date->IsNull(c)) {
-                    // Because date column type is Date instead of
-                    // DateTime, round to start second of date for test.
-                    EXPECT_EQ(TEST_DATA[row].date,
-                            col_date->Nested()->As<ColumnDate>()->At(c));
+                    EXPECT_EQ(TEST_DATA[row].date, date->At(c));
                 }
             }
         }
     );
+    EXPECT_EQ(NUM_ROW, row);
 
-    EXPECT_EQ(sizeof(TEST_DATA) / sizeof(TEST_DATA[0]), row);
+    /// Test with non-callback select with block reuse.
+    Block block;
+    for (int t = 0; t < REUSE_BLOCK_CNT; ++t) {
+        client_->Select("SELECT id, date FROM test.nullable", &block);
+
+        ASSERT_EQ(NUM_ROW, block.GetRowCount());
+        ASSERT_EQ(2U, block.GetColumnCount());
+
+        auto col_id   = block[0]->As<ColumnNullable>();
+        auto col_date = block[1]->As<ColumnNullable>();
+        auto date = col_date->Nested()->As<ColumnDate>();
+
+        for (size_t c = 0; c < block.GetRowCount(); ++c) {
+            EXPECT_EQ(static_cast<bool>(TEST_DATA[c].id_null), col_id->IsNull(c));
+            EXPECT_EQ(static_cast<bool>(TEST_DATA[c].date_null),
+                    col_date->IsNull(c));
+
+            if (!col_id->IsNull(c)) {
+                EXPECT_EQ(TEST_DATA[c].id, col_id->Value<uint64_t>(c));
+            }
+            if (!col_date->IsNull(c)) {
+                // Because date column type is Date instead of
+                // DateTime, round to start second of date for test.
+                EXPECT_EQ(TEST_DATA[c].date, date->At(c));
+            }
+        }
+    }
 }
 
 TEST_P(ClientCase, Numbers) {
+    const size_t NUM_ROW = 100000;
     size_t num = 0;
-
     client_->Select("SELECT number, number FROM system.numbers LIMIT 100000", [&num](const Block& block)
         {
             if (block.GetRowCount() == 0) {
@@ -244,7 +477,22 @@ TEST_P(ClientCase, Numbers) {
             }
         }
     );
-    EXPECT_EQ(100000U, num);
+    EXPECT_EQ(NUM_ROW, num);
+
+    /// Test with non-callback select with block reuse.
+    Block block;
+    for (int t = 0; t < REUSE_BLOCK_CNT; ++t) {
+        client_->Select("SELECT number, number FROM system.numbers LIMIT 100000", &block);
+
+        ASSERT_EQ(NUM_ROW, block.GetRowCount());
+        ASSERT_EQ(2U, block.GetColumnCount());
+        auto n = static_cast<const uint64_t*>(block[0]->Addr(0));
+        auto n2 = static_cast<const uint64_t*>(block[1]->Addr(0));
+        for (size_t c = 0; c < block.GetRowCount(); ++c) {
+            EXPECT_EQ(c, *n++);
+            EXPECT_EQ(c, *n2++);
+        }
+    }
 }
 
 TEST_P(ClientCase, Cancelable) {
@@ -253,15 +501,16 @@ TEST_P(ClientCase, Cancelable) {
             "CREATE TABLE IF NOT EXISTS test.cancel (x UInt64) "
             "ENGINE = Memory");
 
-    /// Insert a few blocks. In order to make cancel have effect, we have to
-    /// insert a relative larget amount of data.
-    const int kBlock = 10;
-    const int kRowEachBlock = 1000000;
-    for (unsigned j = 0; j < kBlock; j++) {
+    /// Insert a few blocks.
+    /// The following setup only makes cancel effective for compression enabled
+    /// client.
+    const int NUM_BLOCK = 10;
+    const int NUM_ROW_EACH_BLOCK = 500000;
+    for (unsigned j = 0; j < NUM_BLOCK; j++) {
         Block b;
 
         auto x = std::make_shared<ColumnUInt64>();
-        for (uint64_t i = 0; i < kRowEachBlock; i++) {
+        for (uint64_t i = 0; i < NUM_ROW_EACH_BLOCK; i++) {
             x->Append(i);
         }
 
@@ -280,8 +529,7 @@ TEST_P(ClientCase, Cancelable) {
             }
         );
     );
-    /// It's easier to get query cancelled for compress enabled client.
-    EXPECT_LE(row_cnt, kBlock * kRowEachBlock);
+    EXPECT_LE(row_cnt, NUM_BLOCK * NUM_ROW_EACH_BLOCK);
 }
 
 TEST_P(ClientCase, Exception) {
@@ -314,6 +562,7 @@ TEST_P(ClientCase, Enum) {
         { 3, 2, "Two" },
         { 4, 1, "One", },
     };
+    constexpr size_t NUM_ROW = sizeof(TEST_DATA) / sizeof(TEST_DATA[0]);
 
     /// Insert some values.
     {
@@ -348,14 +597,35 @@ TEST_P(ClientCase, Enum) {
 
             EXPECT_EQ("id", block.GetColumnName(0));
             EXPECT_EQ("e", block.GetColumnName(1));
-            for (size_t i = 0; i < block.GetRowCount(); ++i, ++row) {
-                EXPECT_EQ(TEST_DATA[row].id, (*block[0]->As<ColumnUInt64>())[i]);
-                EXPECT_EQ(TEST_DATA[row].eval, (*block[1]->As<ColumnEnum8>()).At(i));
-                EXPECT_EQ(TEST_DATA[row].ename, (*block[1]->As<ColumnEnum8>()).NameAt(i));
+
+            for (size_t c = 0; c < block.GetRowCount(); ++c, ++row) {
+                EXPECT_EQ(TEST_DATA[row].id, (*block[0]->As<ColumnUInt64>())[c]);
+                EXPECT_EQ(TEST_DATA[row].eval, (*block[1]->As<ColumnEnum8>()).At(c));
+                EXPECT_EQ(TEST_DATA[row].ename, (*block[1]->As<ColumnEnum8>()).NameAt(c));
             }
         }
     );
-    EXPECT_EQ(sizeof(TEST_DATA)/sizeof(TEST_DATA[0]), row);
+    EXPECT_EQ(NUM_ROW, row);
+
+    /// Test with non-callback select with block reuse.
+    Block block;
+    for (int t = 0; t < REUSE_BLOCK_CNT; ++t) {
+        client_->Select("SELECT id, e FROM test.enums", &block);
+
+        ASSERT_EQ(NUM_ROW, block.GetRowCount());
+        ASSERT_EQ(2U, block.GetColumnCount());
+        EXPECT_EQ("id", block.GetColumnName(0));
+        EXPECT_EQ("e", block.GetColumnName(1));
+
+        auto id = static_cast<const uint64_t*>(block[0]->Addr(0));
+        auto eval = static_cast<const int8_t*>(block[1]->Addr(0));
+        auto ename = block[1]->As<ColumnEnum8>();
+        for (size_t c = 0; c < block.GetRowCount(); ++c) {
+            EXPECT_EQ(TEST_DATA[c].id, *id++);
+            EXPECT_EQ(TEST_DATA[c].eval, *eval++);
+            EXPECT_EQ(TEST_DATA[c].ename, ename->NameAt(c));
+        }
+    }
 }
 
 INSTANTIATE_TEST_CASE_P(
