@@ -85,8 +85,9 @@ void Block::Clear() {
     info_.bucket_num = -1;
     info_.is_overflows = 0;
 
+    // Reuse block for insert needs column name, so do not clear column name
+    // here.
     for (auto& col : columns_) {
-        col.name.resize(0);
         col.column->Clear();
     }
 }

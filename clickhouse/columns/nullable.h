@@ -22,6 +22,13 @@ public:
     /// Appends content of given column to the end of current one.
     void Append(ColumnRef column) override;
 
+    /// Appends one element to the end of column.
+    void AppendAddr(const void* v) override {
+        // TODO how to support insert null?
+        nulls_->AppendAddr(0);
+        nested_->AppendAddr(v);
+    }
+
     /// Loads column data from input stream.
     bool Load(CodedInputStream* input, size_t rows) override;
 

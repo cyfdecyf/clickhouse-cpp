@@ -43,6 +43,11 @@ public:
         return &data_[n];
     }
 
+    /// Appends one element to the end of column.
+    void AppendAddr(const void* v) override {
+        Append(*static_cast<const T*>(v));
+    }
+
     /// Removes all data, ready for Load/Append.
     void Clear() override;
 

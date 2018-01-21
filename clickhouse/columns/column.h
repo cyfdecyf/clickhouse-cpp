@@ -42,6 +42,17 @@ public:
     /// Appends content of given column to the end of current one.
     virtual void Append(ColumnRef column) = 0;
 
+    /// Appends one element to the end of column.
+    virtual void AppendAddr(const void* v) {
+        (void)v;
+        throw "AppendAddr not supported";
+    }
+
+    template <typename T>
+    void AppendValue(const T& v) {
+        AppendAddr(&v);
+    }
+
     /// Loads column data from input stream.
     virtual bool Load(CodedInputStream* input, size_t rows) = 0;
 
@@ -61,7 +72,7 @@ public:
     /// arithemetic.
     virtual const void* Addr(size_t n) const {
         (void)n;
-        throw "not supported";
+        throw "Addr not supported";
     }
 
     /// Get value of nth row.

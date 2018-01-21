@@ -9,11 +9,11 @@ class ClientCase : public testing::TestWithParam<ClientOptions> {
 protected:
     void SetUp() override {
         client_ = new Client(GetParam());
-        client_->Execute("CREATE DATABASE IF NOT EXISTS test");
+        client_->Execute("DROP DATABASE IF EXISTS test");
+        client_->Execute("CREATE DATABASE test");
     }
 
     void TearDown() override {
-        client_->Execute("DROP DATABASE test");
         delete client_;
     }
 
@@ -157,27 +157,39 @@ TEST_P(ClientCase, DateTime) {
             "CREATE TABLE IF NOT EXISTS test.datetime (d DateTime) "
             "ENGINE = Memory");
 
-    auto d = std::make_shared<ColumnDateTime>();
-    auto const now = std::time(nullptr);
-    d->Append(now);
+    const std::time_t now = std::time(nullptr);
+    const struct {
+        std::time_t d;
+    } TEST_DATA[] = {
+        { now - 2 * 86400 },
+        { now - 1 * 86400 },
+        { now + 1 * 86400 },
+        { now + 2 * 86400 },
+    };
+    constexpr size_t NUM_ROW = sizeof(TEST_DATA) / sizeof(TEST_DATA[0]);
+    {
+        Block b;
+        b.AppendColumn("d", std::make_shared<ColumnDateTime>());
+        for (auto const& td : TEST_DATA) {
+            b[0]->AppendValue(td.d);
+        }
+        client_->Insert("test.datetime", b);
+    }
 
-    Block b;
-    b.AppendColumn("d", d);
-    client_->Insert("test.datetime", b);
-
-    client_->Select("SELECT d FROM test.datetime", [&now](const Block& block)
+    size_t row = 0;
+    client_->Select("SELECT d FROM test.datetime", [=, &row](const Block& block)
         {
             if (block.GetRowCount() == 0) {
                 return;
             }
 
-            ASSERT_EQ(1U, block.GetRowCount());
+            ASSERT_EQ(NUM_ROW, block.GetRowCount());
             ASSERT_EQ(1U, block.GetColumnCount());
             EXPECT_EQ("d", block.GetColumnName(0));
 
             auto col = block[0]->As<ColumnDateTime>();
-            for (size_t c = 0; c < block.GetRowCount(); ++c) {
-                EXPECT_EQ(now, col->At(c));
+            for (size_t c = 0; c < block.GetRowCount(); ++c, ++row) {
+                EXPECT_EQ(TEST_DATA[row].d, col->At(c));
             }
         }
     );
@@ -187,12 +199,12 @@ TEST_P(ClientCase, DateTime) {
     for (int t = 0; t < REUSE_BLOCK_CNT; ++t) {
         client_->Select("SELECT d FROM test.datetime", &block);
 
-        ASSERT_EQ(1U, block.GetRowCount());
+        ASSERT_EQ(NUM_ROW, block.GetRowCount());
         ASSERT_EQ(1U, block.GetColumnCount());
 
         auto col = block[0]->As<ColumnDateTime>();
         for (size_t c = 0; c < block.GetRowCount(); ++c) {
-            EXPECT_EQ(now, col->At(c));
+            EXPECT_EQ(TEST_DATA[c].d, col->At(c));
         }
     }
 }
@@ -215,16 +227,14 @@ TEST_P(ClientCase, String) {
 
     /// Insert some values.
     {
-        auto id = std::make_shared<ColumnUInt64>();
-        auto name = std::make_shared<ColumnString>();
-        for (auto const& td : TEST_DATA) {
-            id->Append(td.id);
-            name->Append(td.name);
-        }
-
         Block block;
-        block.AppendColumn("id"  , id);
-        block.AppendColumn("name", name);
+        block.AppendColumn("id", std::make_shared<ColumnUInt64>());
+        block.AppendColumn("name", std::make_shared<ColumnString>());
+
+        for (auto const& td : TEST_DATA) {
+            block[0]->AppendValue(td.id);
+            block[1]->AppendValue(td.name);
+        }
 
         client_->Insert("test.string", block);
     }
@@ -290,6 +300,7 @@ TEST_P(ClientCase, FixedString) {
         { 3, "foo" },
         { 5, "bar" },
         { 7, "name" },
+        { 9, "name___" },  // Character after fixed length should be dropped.
     };
     constexpr size_t NUM_ROW = sizeof(TEST_DATA) / sizeof(TEST_DATA[0]);
 
@@ -328,7 +339,8 @@ TEST_P(ClientCase, FixedString) {
                 EXPECT_EQ(TEST_DATA[row].id, (*id)[c]);
                 EXPECT_EQ(FIXED_STR_LEN, (*name)[c].size());
                 /// Construct new string to drop ending null byte for test.
-                EXPECT_EQ(TEST_DATA[row].name, std::string((*name)[c].c_str()));
+                EXPECT_EQ(TEST_DATA[row].name.substr(0, FIXED_STR_LEN),
+                        std::string((*name)[c].c_str()));
             }
         }
     );
@@ -349,7 +361,8 @@ TEST_P(ClientCase, FixedString) {
         for (size_t c = 0; c < block.GetRowCount(); ++c) {
             EXPECT_EQ(TEST_DATA[c].id, *id++);
             EXPECT_EQ(FIXED_STR_LEN, name->size());
-            EXPECT_EQ(TEST_DATA[c].name, std::string(name->c_str()));
+            EXPECT_EQ(TEST_DATA[c].name.substr(0, FIXED_STR_LEN),
+                    std::string(name->c_str()));
             ++name;
         }
     }
@@ -384,8 +397,8 @@ TEST_P(ClientCase, Nullable) {
             auto id = std::make_shared<ColumnUInt64>();
             auto nulls = std::make_shared<ColumnUInt8>();
             for (auto const& td : TEST_DATA) {
-                id->Append(td.id);
-                nulls->Append(td.id_null);
+                id->AppendValue(td.id);
+                nulls->AppendValue(td.id_null);
             }
             block.AppendColumn("id", std::make_shared<ColumnNullable>(id, nulls));
         }
@@ -393,7 +406,7 @@ TEST_P(ClientCase, Nullable) {
             auto date = std::make_shared<ColumnDate>();
             auto nulls = std::make_shared<ColumnUInt8>();
             for (auto const& td : TEST_DATA) {
-                date->Append(td.date);
+                date->AppendValue(td.date);
                 nulls->Append(td.date_null);
             }
             block.AppendColumn("date", std::make_shared<ColumnNullable>(date, nulls));
@@ -624,6 +637,67 @@ TEST_P(ClientCase, Enum) {
             EXPECT_EQ(TEST_DATA[c].id, *id++);
             EXPECT_EQ(TEST_DATA[c].eval, *eval++);
             EXPECT_EQ(TEST_DATA[c].ename, ename->NameAt(c));
+        }
+    }
+}
+
+TEST_P(ClientCase, Insert) {
+    /// Test reuse Block with Bolock::Clear and Column::AppendValue.
+    client_->Execute(
+            "CREATE TABLE IF NOT EXISTS test.insert (d DateTime, i32 Int32, u64 UInt64, fs FixedString(4), s String) "
+            "ENGINE = Memory");
+
+    const struct {
+        std::time_t t;
+        int32_t i32;
+        uint64_t u64;
+        std::string fs;
+        std::string s;
+    } TEST_DATA[] = {
+        { std::time(nullptr) + 0, -1, 1, "One", "Hello" },
+        { std::time(nullptr) + 1,  0, 2, "Two", "Hello" },
+        { std::time(nullptr) + 2,  1, 3, "Three", "Hello" },
+        { std::time(nullptr) + 3,  2, 4, "Four", "Hello" },
+        { std::time(nullptr) + 4,  3, 5, "One", "Hello" },
+    };
+    constexpr size_t NUM_ROW = sizeof(TEST_DATA) / sizeof(TEST_DATA[0]);
+    const size_t FIXED_STR_LEN = 4;
+
+    /// Reuse same block to insert some value.
+    const int REPEAT_CNT = 5;
+    Block block;
+    block.AppendColumn("d", std::make_shared<ColumnDateTime>());
+    block.AppendColumn("i32", std::make_shared<ColumnInt32>());
+    block.AppendColumn("u64", std::make_shared<ColumnUInt64>());
+    block.AppendColumn("fs", std::make_shared<ColumnFixedString>(FIXED_STR_LEN));
+    block.AppendColumn("s", std::make_shared<ColumnString>());
+    for (int i = 0; i < REPEAT_CNT; ++i) {
+        block.Clear();
+
+        for (auto const& td : TEST_DATA) {
+            block[0]->AppendValue(td.t);
+            block[1]->AppendValue(td.i32);
+            block[2]->AppendValue(td.u64);
+            block[3]->AppendValue(td.fs);
+            block[4]->AppendValue(td.s);
+        }
+
+        client_->Insert("test.insert", block);
+    }
+
+    client_->Select("SELECT * FROM test.insert", &block);
+    ASSERT_EQ(NUM_ROW * REPEAT_CNT, block.GetRowCount());
+    ASSERT_EQ(5U, block.GetColumnCount());
+    for (int i = 0; i < REPEAT_CNT; ++i) {
+        for (size_t c = 0; c < NUM_ROW; ++c) {
+            size_t idx = i * NUM_ROW + c;
+            auto const& td = TEST_DATA[c];
+            EXPECT_EQ(td.t, block[0]->As<ColumnDateTime>()->At(idx));
+            EXPECT_EQ(td.i32, block[1]->Value<int32_t>(idx));
+            EXPECT_EQ(td.u64, block[2]->Value<uint64_t>(idx));
+            ASSERT_EQ(td.fs.substr(0, FIXED_STR_LEN),
+                    std::string(block[3]->Value<std::string>(idx).c_str())) << i;
+            //EXPECT_EQ(td.s, std::string(block[4]->Value<std::string>(idx)));
         }
     }
 }

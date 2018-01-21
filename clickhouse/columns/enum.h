@@ -30,6 +30,11 @@ public:
     /// Appends content of given column to the end of current one.
     void Append(ColumnRef column) override;
 
+    /// Appends one element to the end of column.
+    void AppendAddr(const void* v) override {
+        Append(*static_cast<const T*>(v));
+    }
+
     /// Loads column data from input stream.
     bool Load(CodedInputStream* input, size_t rows) override;
 
