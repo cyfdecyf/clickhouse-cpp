@@ -48,6 +48,9 @@ public:
     /// Removes all data, ready for Load/Append.
     void Clear() override;
 
+    /// Reserve memory to hold data.
+    void ReserveRows(size_t rows) override;
+
 private:
     ColumnRef nested_;
     std::shared_ptr<ColumnUInt8> nulls_;

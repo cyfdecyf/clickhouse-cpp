@@ -47,6 +47,9 @@ void ColumnDate::Clear() {
     data_->Clear();
 }
 
+void ColumnDate::ReserveRows(size_t rows) {
+    data_->ReserveRows(rows);
+}
 
 ColumnDateTime::ColumnDateTime()
     : Column(Type::CreateDateTime())
@@ -93,5 +96,8 @@ void ColumnDateTime::Clear() {
     data_->Clear();
 }
 
+void ColumnDateTime::ReserveRows(size_t rows) {
+    data_->ReserveRows(rows);
+}
 
 }

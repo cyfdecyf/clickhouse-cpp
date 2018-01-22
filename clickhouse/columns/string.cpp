@@ -93,6 +93,10 @@ void ColumnFixedString::Clear() {
     }
 }
 
+void ColumnFixedString::ReserveRows(size_t rows) {
+    data_.reserve(rows);
+}
+
 ColumnString::ColumnString()
     : Column(Type::CreateString())
 {
@@ -175,6 +179,10 @@ void ColumnString::Clear() {
     // load data into correct place, so we maintain size by ourself instead of
     // relying on data_.size().
     size_ = 0;
+}
+
+void ColumnString::ReserveRows(size_t rows) {
+    data_.reserve(rows);
 }
 
 }

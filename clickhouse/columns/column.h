@@ -84,6 +84,9 @@ public:
     /// Removes all data, ready for Load/Append again.
     virtual void Clear() = 0;
 
+    /// Reserve memory to hold data.
+    virtual void ReserveRows(size_t rows) = 0;
+
     /// Return type name used by ClickHouse protocol.
     std::string GetTypeName() {
         return type_->GetName();

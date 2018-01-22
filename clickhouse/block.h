@@ -42,7 +42,7 @@ public:
 
 public:
      Block() = default;
-     Block(size_t cols, size_t rows);
+     Block(size_t cols);
     ~Block();
 
     /// Append named column to the block.
@@ -65,6 +65,10 @@ public:
 
     /// Removes data in all columns, ready for select query or append data.
     void Clear();
+
+    /// Reserve memory to hold rows of data. Only works for already added
+    /// columns, thus mainly useful for using Block for insert.
+    void ReserveRows(size_t rows);
 
 private:
     friend class Client;

@@ -66,6 +66,11 @@ void ColumnVector<T>::Clear() {
     data_.resize(0);
 }
 
+template <typename T>
+void ColumnVector<T>::ReserveRows(size_t rows) {
+    data_.reserve(rows);
+}
+
 template class ColumnVector<int8_t>;
 template class ColumnVector<int16_t>;
 template class ColumnVector<int32_t>;

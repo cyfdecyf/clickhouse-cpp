@@ -44,6 +44,9 @@ public:
     /// Removes all data, ready for Load/Append.
     void Clear() override;
 
+    /// Reserve memory to hold data.
+    void ReserveRows(size_t rows) override;
+
 private:
     std::shared_ptr<ColumnUInt16> data_;
 };
@@ -86,6 +89,9 @@ public:
 
     /// Removes all data, ready for Load/Append.
     void Clear() override;
+
+    /// Reserve memory to hold data.
+    void ReserveRows(size_t rows) override;
 
 private:
     std::shared_ptr<ColumnUInt32> data_;

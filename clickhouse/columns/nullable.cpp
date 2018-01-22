@@ -62,4 +62,9 @@ void ColumnNullable::Clear() {
     nested_->Clear();
 }
 
+void ColumnNullable::ReserveRows(size_t rows) {
+    nulls_->ReserveRows(rows);
+    nested_->ReserveRows(rows);
+}
+
 }

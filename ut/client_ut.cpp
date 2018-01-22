@@ -685,6 +685,8 @@ TEST_P(ClientCase, Insert) {
         client_->Insert("test.insert", block);
     }
 
+    block.ReserveRows(NUM_ROW * REPEAT_CNT);
+
     client_->Select("SELECT * FROM test.insert", &block);
     ASSERT_EQ(NUM_ROW * REPEAT_CNT, block.GetRowCount());
     ASSERT_EQ(5U, block.GetColumnCount());

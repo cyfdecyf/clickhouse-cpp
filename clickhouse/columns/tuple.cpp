@@ -42,4 +42,10 @@ void ColumnTuple::Clear() {
   }
 }
 
+void ColumnTuple::ReserveRows(size_t rows) {
+  for (auto& c : columns_) {
+      c->ReserveRows(rows);
+  }
+}
+
 }

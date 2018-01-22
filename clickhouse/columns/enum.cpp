@@ -91,6 +91,11 @@ void ColumnEnum<T>::Clear() {
     data_.resize(0);
 }
 
+template <typename T>
+void ColumnEnum<T>::ReserveRows(size_t rows) {
+    data_.reserve(rows);
+}
+
 template class ColumnEnum<int8_t>;
 template class ColumnEnum<int16_t>;
 

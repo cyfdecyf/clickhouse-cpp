@@ -36,6 +36,9 @@ public:
     /// Removes all data, ready for Load/Append.
     void Clear() override;
 
+    /// Reserve memory to hold data.
+    void ReserveRows(size_t rows) override;
+
 private:
     std::vector<ColumnRef> columns_;
 };

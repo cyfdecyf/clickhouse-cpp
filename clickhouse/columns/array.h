@@ -48,6 +48,9 @@ public:
     /// Removes all data, ready for Load/Append.
     void Clear() override;
 
+    /// Reserve memory to hold data.
+    void ReserveRows(size_t rows) override;
+
 private:
     size_t GetOffset(size_t n) const;
 

@@ -31,10 +31,7 @@ bool Block::Iterator::IsValid() const {
 }
 
 
-Block::Block(size_t cols, size_t rows)
-{
-    // TODO reserve rows for each column.
-    (void)rows;
+Block::Block(size_t cols) {
     columns_.reserve(cols);
 }
 
@@ -89,6 +86,12 @@ void Block::Clear() {
     // here.
     for (auto& col : columns_) {
         col.column->Clear();
+    }
+}
+
+void Block::ReserveRows(size_t rows) {
+    for (auto& col : columns_) {
+        col.column->ReserveRows(rows);
     }
 }
 

@@ -88,4 +88,11 @@ void ColumnArray::Clear() {
     data_->Clear();
 }
 
+void ColumnArray::ReserveRows(size_t rows) {
+    // Assume each array have 3 elements.
+    const size_t N_ELEMENT = 3;
+    offsets_->ReserveRows(rows * N_ELEMENT);
+    data_->ReserveRows(rows);
+}
+
 }

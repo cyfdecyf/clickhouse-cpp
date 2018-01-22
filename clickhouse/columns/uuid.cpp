@@ -57,5 +57,9 @@ void ColumnUUID::Clear() {
     data_->Clear();
 }
 
+void ColumnUUID::ReserveRows(size_t rows) {
+    data_->ReserveRows(rows * 2);
+}
+
 }
 

@@ -48,6 +48,9 @@ public:
     /// Removes all data, ready for Load/Append.
     void Clear() override;
 
+    /// Reserve memory to hold data.
+    void ReserveRows(size_t rows) override;
+
 private:
     const size_t string_size_;
     std::vector<std::string> data_;
@@ -99,6 +102,9 @@ public:
 
     /// Removes all data, ready for Load/Append.
     void Clear() override;
+
+    /// Reserve memory to hold data.
+    void ReserveRows(size_t rows) override;
 
 private:
     std::vector<std::string> data_;
