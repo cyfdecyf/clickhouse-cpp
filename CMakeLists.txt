@@ -4,6 +4,9 @@ INCLUDE (cmake/cpp11.cmake)
 INCLUDE (cmake/subdirs.cmake)
 
 OPTION(BUILD_BENCHMARK "Build benchmark" OFF)
+# Invoke cmake -DBUILD_PYBIND=ON -DPYTHON_EXECUTABLE:FILEPATH=/usr/bin/python2.7
+# to build module for Python 2.7
+OPTION(BUILD_PYBIND "Build Python binding" OFF)
 
 PROJECT (CLICKHOUSE-CLIENT)
 
@@ -33,3 +36,7 @@ PROJECT (CLICKHOUSE-CLIENT)
     IF (BUILD_BENCHMARK)
         SUBDIRS(bench)
     ENDIF (BUILD_BENCHMARK)
+
+    IF (BUILD_PYBIND)
+        SUBDIRS(pybind)
+    ENDIF (BUILD_PYBIND)

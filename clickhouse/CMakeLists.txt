@@ -31,3 +31,7 @@ TARGET_LINK_LIBRARIES (clickhouse-cpp-lib
     cityhash-lib
     lz4-lib
 )
+
+IF (BUILD_PYBIND)
+    SET_PROPERTY(TARGET clickhouse-cpp-lib PROPERTY POSITION_INDEPENDENT_CODE ON)
+ENDIF (BUILD_PYBIND)

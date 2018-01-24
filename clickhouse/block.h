@@ -45,8 +45,10 @@ public:
      Block(size_t cols);
     ~Block();
 
-    /// Append named column to the block.
-    void AppendColumn(const std::string& name, const ColumnRef& col);
+    /// Append named column to the block, col must have same size as other
+    /// columns if check_size is true.
+    void AppendColumn(const std::string& name, const ColumnRef& col,
+            bool check_size = true);
 
     /// Count of columns in the block.
     size_t GetColumnCount() const;

@@ -82,6 +82,11 @@ public:
 
     static TypeRef CreateUUID();
 
+public:
+    int GetStringSize() {
+        return string_size_;
+    }
+
 private:
     Type(const Code code);
 

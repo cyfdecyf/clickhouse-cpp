@@ -37,9 +37,11 @@ Block::Block(size_t cols) {
 
 Block::~Block() = default;
 
-void Block::AppendColumn(const std::string& name, const ColumnRef& col) {
-    if ((columns_.size() > 0) &&
-            (col->Size() != columns_[0].column->Size())) {
+void Block::AppendColumn(const std::string& name, const ColumnRef& col,
+        bool check_size) {
+    if (check_size &&
+            ((columns_.size() > 0) &&
+             (col->Size() != columns_[0].column->Size()))) {
         throw std::runtime_error(
             "all columns in block must have same count of rows, 1st column size "
             + std::to_string(columns_[0].column->Size()) + " != "
